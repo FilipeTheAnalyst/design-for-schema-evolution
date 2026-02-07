@@ -77,7 +77,7 @@ snapshots_schema = res.Schema(
 
 compute_warehouse = res.Warehouse(
     name="COMPUTE_WH",
-    warehouse_size=res.WarehouseSize.XSMALL,
+    warehouse_size="XSMALL",
     auto_suspend=60,
     auto_resume=True,
     comment="Default compute for schema evolution project",
@@ -87,7 +87,7 @@ compute_warehouse = res.Warehouse(
 # Iceberg Tables (V1 Schema)
 # =============================================================================
 
-weather_forecasts_iceberg = res.IcebergTable(
+weather_forecasts_iceberg = res.SnowflakeIcebergTable(
     name="WEATHER_FORECASTS_ICEBERG",
     schema=raw_schema,
     columns=[
@@ -107,7 +107,7 @@ weather_forecasts_iceberg = res.IcebergTable(
     catalog="SNOWFLAKE",
 )
 
-weather_hourly_iceberg = res.IcebergTable(
+weather_hourly_iceberg = res.SnowflakeIcebergTable(
     name="WEATHER_HOURLY_ICEBERG",
     schema=raw_schema,
     columns=[

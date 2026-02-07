@@ -44,6 +44,14 @@ Docker + just + GH Actions ← Reproducibility & CI/CD
 - [just](https://github.com/casey/just#installation) command runner (`brew install just`)
 - A Snowflake account ([free trial](https://signup.snowflake.com/))
 
+### ⚡ Start Here
+
+**First time?** Use the [QUICK_START.md](QUICK_START.md) checklist (5 minutes) to verify prerequisites.
+
+Then follow the step-by-step [SETUP_VALIDATION.md](SETUP_VALIDATION.md) guide for full setup.
+
+**Dependency Issue?** See [DEPENDENCY_FIXES.md](DEPENDENCY_FIXES.md) if `uv sync` fails with unresolved titan-core version.
+
 ### Setup
 
 ```bash
@@ -79,6 +87,28 @@ just dbt-build-local # Run dbt models + tests
 ```
 
 ---
+
+## Setup Validation
+
+To ensure the entire project works end-to-end, follow the **[SETUP_VALIDATION.md](SETUP_VALIDATION.md)** guide. It provides:
+
+- ✅ Step-by-step validation of each component
+- ✅ Prerequisites checklist
+- ✅ Troubleshooting for common issues
+- ✅ Success criteria (11-step validation)
+
+**Start here** if you're running the project for the first time.
+
+### Project Health Status
+
+**[VALIDATION_REPORT.md](VALIDATION_REPORT.md)** provides:
+- ✅ Full validation results (46/49 checks passing - 93%)
+- ✅ Component-by-component status
+- ✅ Confidence assessment for each layer
+- ✅ Pre-setup state analysis
+- ✅ Next steps and recommendations
+
+**Check this** to understand the current state of the project before running setup.
 
 ## Snowflake free trial setup
 

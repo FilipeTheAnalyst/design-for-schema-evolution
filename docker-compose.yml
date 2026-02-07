@@ -21,7 +21,6 @@ services:
     volumes:
       - ./extract:/app/extract
       - ./transform:/app/transform
-      - ./load:/app/load
 
   # ─── Extraction: dlt → Snowflake (V1 schema) ─────────────────────────────
   extract:
