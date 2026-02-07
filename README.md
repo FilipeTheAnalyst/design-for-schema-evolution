@@ -50,8 +50,6 @@ Docker + just + GH Actions ← Reproducibility & CI/CD
 
 Then follow the step-by-step [SETUP_VALIDATION.md](SETUP_VALIDATION.md) guide for full setup.
 
-**Dependency Issue?** See [DEPENDENCY_FIXES.md](DEPENDENCY_FIXES.md) if `uv sync` fails with unresolved titan-core version.
-
 ### Setup
 
 ```bash
