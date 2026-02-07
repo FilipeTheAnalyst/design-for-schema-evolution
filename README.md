@@ -55,8 +55,10 @@ cd design-for-schema-evolution
 just setup-env
 # → Edit .env with your Snowflake account details
 
-# 3. Set up Snowflake objects (run once)
-# Execute load/snowflake_setup.sql in your Snowflake worksheet
+# 3. Set up Snowflake objects with Titan (Infrastructure as Code)
+just install                           # Install Titan via uv
+just titan-plan                        # See planned changes
+just titan-apply                       # Apply infrastructure
 
 # 4. Build the Docker image
 just build
@@ -84,25 +86,29 @@ just dbt-build-local # Run dbt models + tests
 2. Choose **Enterprise** edition (30-day free trial, no credit card)
 3. Select a cloud provider and region
 4. After account creation, note your **account identifier** (e.g. `abc12345.us-east-1`)
-5. Run [load/snowflake_setup.sql](load/snowflake_setup.sql) in a Snowflake worksheet
-6. (Optional) Run [load/iceberg_setup.sql](load/iceberg_setup.sql) for Iceberg tables
-7. Add credentials to your `.env` file
+5. Add credentials to your `.env` file (copy from `.env.example`)
+6. Run Titan to create database, schemas, and Iceberg tables:
+   ```bash
+   just titan-apply
+   ```
+
+Titan uses Infrastructure as Code (defined in [snowflake/manifest.py](snowflake/manifest.py)) to safely manage your Snowflake resources. See [Titan docs](https://titan.readthedocs.io/) for more.
 
 ---
 
 ## Project structure
 
 ```
-├── extract/                    # dlt extraction layer
+├── snowflake/                          # Titan Infrastructure as Code
+│   ├── manifest.py                     #   Database, schemas, warehouse, Iceberg tables
+│   └── __init__.py
+│
+├── extract/                            # dlt extraction layer
 │   ├── sources/
-│   │   └── open_meteo.py       #   dlt source: V1 & V2 weather resources
-│   └── open_meteo_pipeline.py  #   Pipeline: Open-Meteo → Snowflake
+│   │   └── open_meteo.py               #   dlt source: V1 & V2 weather resources
+│   └── open_meteo_pipeline.py          #   Pipeline: Open-Meteo → Snowflake
 │
-├── load/                       # Snowflake & Iceberg setup
-│   ├── snowflake_setup.sql     #   Database, schemas, warehouse DDL
-│   └── iceberg_setup.sql       #   Iceberg table definitions + evolution
-│
-├── transform/                  # dbt project
+├── transform/                          # dbt project
 │   ├── models/
 │   │   ├── staging/            #   stg_weather_forecasts, stg_weather_hourly
 │   │   ├── intermediate/       #   int_weather_daily_agg
@@ -125,6 +131,7 @@ just dbt-build-local # Run dbt models + tests
 │
 ├── Dockerfile                  # Containerized pipeline
 ├── docker-compose.yml          # Service definitions
+├── titan.yml                   # Titan configuration
 ├── justfile                    # Command shortcuts
 ├── pyproject.toml              # Python project config
 └── .env.example                # Environment variable template
@@ -136,7 +143,9 @@ just dbt-build-local # Run dbt models + tests
 
 | Command | Description |
 |---------|-------------|
-| `just setup` | Full local setup (env + uv + deps + dbt packages) |
+| `just setup` | Full local setup (env + uv + deps + Titan + dbt packages) |
+| `just titan-plan` | Preview Snowflake infrastructure changes |
+| `just titan-apply` | Create/update Snowflake resources (database, schemas, warehouse, Iceberg tables) |
 | `just build` | Build Docker image |
 | `just extract` | Run dlt extraction V1 (Docker) |
 | `just extract-v2` | Run dlt extraction V2 — evolved schema (Docker) |
@@ -189,6 +198,7 @@ Run `just` with no arguments to see all available commands.
 |-------|------|---------|
 | **API** | [Open-Meteo](https://open-meteo.com/) | Free weather forecast data (no auth) |
 | **Extract & Load** | [dlt (dlthub)](https://dlthub.com/) | Schema-aware ingestion into Snowflake |
+| **Infrastructure** | [Titan](https://github.com/Titan-Systems/titan) | Infrastructure as Code for Snowflake |
 | **Storage** | [Snowflake](https://www.snowflake.com/) + [Apache Iceberg](https://iceberg.apache.org/) | Warehouse with versioned, explicit schemas |
 | **Transform** | [dbt Core](https://www.getdbt.com/) | SQL models, tests, snapshots, docs |
 | **Package manager** | [uv](https://docs.astral.sh/uv/) | Fast Python package installer & resolver |

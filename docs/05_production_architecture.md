@@ -18,10 +18,11 @@
                           │
                           ▼
 ┌────────────────────────────────────────────────────────────────┐
-│              Snowflake + Apache Iceberg                         │
+│         Snowflake + Apache Iceberg (via Titan IaC)             │
 │     • RAW schema: dlt-managed tables                           │
 │     • Iceberg tables: explicit, versioned schemas              │
 │     • STAGING / INTERMEDIATE / MARTS schemas                    │
+│     • Infrastructure defined in Git (snowflake/manifest.py)    │
 └─────────────────────────┬──────────────────────────────────────┘
                           │
                           ▼
@@ -40,9 +41,29 @@
 | Layer | Tool | Responsibility |
 |-------|------|----------------|
 | **Extract** | dlt | API → Snowflake, schema inference, column evolution |
+| **Infrastructure** | Titan | Version-controlled database, schemas, warehouse, table definitions |
 | **Store** | Snowflake + Iceberg | Explicit schemas, versioned metadata, safe evolution |
 | **Transform** | dbt | Cleaning, aggregation, testing, documentation |
 | **Orchestrate** | Docker + just + GitHub Actions | Reproducibility, CI/CD, scheduling |
+
+## Infrastructure as Code with Titan
+
+In production, Snowflake objects are managed via Titan, not manual SQL:
+
+```bash
+# Code review process:
+git diff                       # See proposed infrastructure changes
+just titan-plan               # Preview what will change in Snowflake
+# → Review in PR, approve
+just titan-apply              # Apply to Snowflake
+git commit snowflake/manifest.py versions.md
+```
+
+This ensures:
+- **Auditability**: Every change is traced in git
+- **Rollback**: `git revert + just titan-apply` reverts infrastructure changes
+- **Team consistency**: Different engineers' state converges
+- **Schema evolution**: Programmatic column additions without manual ALTER TABLE
 
 ## Key design decisions
 
@@ -118,6 +139,8 @@ dbt run -s fct_weather_summary \
 
 ## What to look at
 
-- [justfile](../justfile) — `just demo` runs the full V1 → V2 pipeline
+- [snowflake/manifest.py](../snowflake/manifest.py) — Titan Infrastructure as Code for all Snowflake objects
+- [titan.yml](../titan.yml) — Titan configuration and connection settings
+- [justfile](../justfile) — `just titan-plan` and `just titan-apply` recipes
 - [docker-compose.yml](../docker-compose.yml) — containerized pipeline services
 - [.github/workflows/](../.github/workflows/) — CI/CD automation

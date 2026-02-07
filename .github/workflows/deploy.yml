@@ -22,6 +22,11 @@ on:
   schedule:
     # Run daily at 06:00 UTC
     - cron: '0 6 * * *'
+  
+  push:
+    branches: [ develop, main ]
+    paths:
+      - 'snowflake/**'
 
 env:
   PYTHON_VERSION: "3.11"
@@ -93,3 +98,24 @@ jobs:
         run: |
           echo "=== Test Results ==="
           cat target/run_results.json | python -m json.tool || true
+
+  # ─── Infrastructure as Code (Titan) ────────────────────────────────────────
+  infrastructure:
+    name: Deploy Infrastructure (Titan)
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.modified, 'snowflake/') || github.event_name == 'workflow_dispatch'
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Titan Apply (Snowflake Infrastructure)
+        uses: Titan-Systems/titan-core-action@main
+        with:
+          run-mode: 'create-or-update'
+          resource-path: './snowflake'
+          dry-run: 'false'

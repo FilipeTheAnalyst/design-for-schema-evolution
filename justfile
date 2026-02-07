@@ -36,6 +36,20 @@ dbt-deps:
 setup: setup-env install-uv install dbt-deps
     @echo "Setup complete ✓"
 
+# ─── Snowflake Infrastructure (Titan) ───────────────────────────────────────
+
+# Plan Snowflake infrastructure changes (dry-run)
+titan-plan:
+    titan plan
+
+# Apply Snowflake infrastructure changes
+titan-apply:
+    titan apply
+
+# Show Snowflake resource details
+titan-describe resource="SCHEMA_EVOLUTION_DB":
+    titan describe {{resource}}
+
 # ─── Docker ─────────────────────────────────────────────────────────────────
 
 # Build Docker image

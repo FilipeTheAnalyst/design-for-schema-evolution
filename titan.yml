@@ -1,0 +1,23 @@
+# =============================================================================
+# Titan Configuration
+# =============================================================================
+# Configures Titan's behavior for Snowflake IaC
+#
+# Docs: https://titan.readthedocs.io/en/latest/reference/config/
+
+account: ${SNOWFLAKE_ACCOUNT}
+user: ${SNOWFLAKE_USER}
+password: ${SNOWFLAKE_PASSWORD}
+role: ${SNOWFLAKE_ROLE}
+warehouse: COMPUTE_WH
+database: SCHEMA_EVOLUTION_DB
+
+# Manifest location
+defaults:
+  manifest: snowflake/manifest.py
+
+# Enable for additional logging
+# debug: true
+
+# Dry-run mode (plan without applying)
+# plan_only: true

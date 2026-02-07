@@ -46,5 +46,5 @@ This is exactly what Apache Iceberg provides.
 
 ## What to look at
 
-- [load/snowflake_setup.sql](../load/snowflake_setup.sql) — traditional Snowflake setup
-- [load/iceberg_setup.sql](../load/iceberg_setup.sql) — Iceberg alternative with explicit schemas
+- [snowflake/manifest.py](../snowflake/manifest.py) — Titan Infrastructure as Code definitions
+- [extract/sources/open_meteo.py](../extract/sources/open_meteo.py) — V1 vs V2 param lists

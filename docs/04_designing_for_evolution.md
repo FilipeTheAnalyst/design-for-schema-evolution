@@ -57,9 +57,87 @@ dlt handles schema evolution natively:
 - Adds them to the destination schema automatically
 - Works with Snowflake's Iceberg table support
 
+## Infrastructure as Code with Titan
+
+Manually running SQL scripts to create tables is error-prone. This project uses **Titan**, a Python-based Infrastructure as Code tool for Snowflake, to define and manage all resources declaratively.
+
+### Why Titan?
+
+| Aspect | Manual SQL | Titan (IaC) |
+|--------|-----------|-----------|
+| Version control | Changes are ad-hoc | All changes tracked in git |
+| Reproducibility | Manual + error-prone | Deterministic from code |
+| Rollback | Manual ALTER/DROP | git revert + `titan apply` |
+| Documentation | Separate README notes | Inline code + docstrings |
+| Drift detection | None | `titan plan` shows differences |
+| Schema evolution | Manual ALTER TABLE | Programmatic in manifest |
+
+### Titan manifest
+
+All Snowflake resources are defined in [snowflake/manifest.py](../snowflake/manifest.py):
+
+```python
+from titan import resources as res
+
+database = res.Database(
+    name="SCHEMA_EVOLUTION_DB",
+    comment="Design for Schema Evolution demo project",
+)
+
+weather_forecasts_iceberg = res.IcebergTable(
+    name="WEATHER_FORECASTS_ICEBERG",
+    schema=raw_schema,
+    columns=[
+        res.Column(name="city", data_type="STRING"),
+        res.Column(name="latitude", data_type="FLOAT"),
+        res.Column(name="forecast_date", data_type="DATE"),
+        # ... more columns
+    ],
+    catalog="SNOWFLAKE",
+)
+```
+
+### Applying infrastructure
+
+```bash
+# See what will change (dry-run)
+just titan-plan
+
+# Apply the changes to Snowflake
+just titan-apply
+
+# Inspect a specific resource
+just titan-describe SCHEMA_EVOLUTION_DB
+```
+
+### Schema evolution with Titan
+
+After V2 data is available, evolve the Iceberg tables by adding columns to the manifest:
+
+```python
+weather_forecasts_iceberg = res.IcebergTable(
+    # ... existing columns ...
+    columns=[
+        # ... V1 columns ...
+        res.Column(name="precipitation_sum", data_type="FLOAT"),
+        res.Column(name="wind_speed_10m_max", data_type="FLOAT"),
+        res.Column(name="uv_index_max", data_type="FLOAT"),
+    ],
+)
+```
+
+Then:
+
+```bash
+just titan-plan    # Review the ADD COLUMN operations
+just titan-apply   # Apply to Snowflake
+```
+
+Titan handles the safe Iceberg evolution—no manual ALTER TABLE needed.
+
 ## What to look at
 
-- [load/iceberg_setup.sql](../load/iceberg_setup.sql) — Iceberg table definitions and evolution examples
+- [snowflake/manifest.py](../snowflake/manifest.py) — Titan Infrastructure as Code for all Snowflake objects
 - [extract/sources/open_meteo.py](../extract/sources/open_meteo.py) — V1 → V2 schema version switching
 
 ## Backfilling after schema evolution
