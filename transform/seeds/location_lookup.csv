@@ -1,0 +1,6 @@
+city,latitude,longitude,timezone,country
+New York,40.7128,-74.0060,America/New_York,US
+London,51.5074,-0.1278,Europe/London,GB
+Tokyo,35.6762,139.6503,Asia/Tokyo,JP
+Sydney,-33.8688,151.2093,Australia/Sydney,AU
+São Paulo,-23.5505,-46.6333,America/Sao_Paulo,BR

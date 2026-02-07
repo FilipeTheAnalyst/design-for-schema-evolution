@@ -1,0 +1,6 @@
+[runtime]
+log_level = "INFO"
+
+[destination.snowflake]
+# These are resolved from environment variables at runtime.
+# See .env.example for the full list.

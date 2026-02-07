@@ -1,0 +1,36 @@
+# =============================================================================
+# dbt profiles.yml
+# =============================================================================
+# This file is checked in as a reference. In production, use environment
+# variables or a secrets manager. dbt resolves env vars with the {{ env_var() }}
+# Jinja function.
+#
+# Make sure DBT_PROFILES_DIR points here, or copy to ~/.dbt/profiles.yml
+# =============================================================================
+
+schema_evolution:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'SYSADMIN') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'SCHEMA_EVOLUTION_DB') }}"
+      schema: RAW
+      threads: 4
+      client_session_keep_alive: False
+
+    ci:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'SYSADMIN') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'SCHEMA_EVOLUTION_DB') }}"
+      schema: CI
+      threads: 4
+      client_session_keep_alive: False

@@ -1,0 +1,95 @@
+# =============================================================================
+# Deploy Pipeline — Run extraction and transformations
+# =============================================================================
+# Triggered manually or on a schedule.
+# Runs the full dlt → dbt pipeline against Snowflake.
+# =============================================================================
+
+name: Deploy Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      schema_version:
+        description: 'Schema version to extract (1 = original, 2 = evolved)'
+        required: true
+        default: '1'
+        type: choice
+        options:
+          - '1'
+          - '2'
+
+  schedule:
+    # Run daily at 06:00 UTC
+    - cron: '0 6 * * *'
+
+env:
+  PYTHON_VERSION: "3.11"
+  SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+  SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+  SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+  SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+  SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+  SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+  SNOWFLAKE_SCHEMA: RAW
+  DBT_PROFILES_DIR: ./transform
+
+jobs:
+  extract:
+    name: Extract (dlt → Snowflake)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv pip install --system ".[dev]"
+
+      - name: Run dlt pipeline
+        run: |
+          SCHEMA_VERSION=${{ github.event.inputs.schema_version || '1' }}
+          python -m extract.open_meteo_pipeline --schema-version "$SCHEMA_VERSION"
+
+  transform:
+    name: Transform (dbt)
+    runs-on: ubuntu-latest
+    needs: extract
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install dbt
+        run: uv pip install --system dbt-core dbt-snowflake
+
+      - name: Install dbt packages
+        working-directory: transform
+        run: dbt deps --profiles-dir .
+
+      - name: dbt seed
+        working-directory: transform
+        run: dbt seed --profiles-dir .
+
+      - name: dbt build
+        working-directory: transform
+        run: dbt build --profiles-dir .
+
+      - name: dbt test results
+        if: always()
+        working-directory: transform
+        run: |
+          echo "=== Test Results ==="
+          cat target/run_results.json | python -m json.tool || true

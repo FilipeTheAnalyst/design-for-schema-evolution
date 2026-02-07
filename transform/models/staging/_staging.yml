@@ -1,0 +1,62 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Raw weather data landed by dlt from Open-Meteo API
+    database: "{{ env_var('SNOWFLAKE_DATABASE', 'SCHEMA_EVOLUTION_DB') }}"
+    schema: RAW
+    tables:
+      - name: weather_forecasts
+        description: Daily forecast summaries per city
+        columns:
+          - name: city
+            tests:
+              - not_null
+          - name: forecast_date
+            tests:
+              - not_null
+
+      - name: weather_hourly
+        description: Hourly weather observations per city
+        columns:
+          - name: city
+            tests:
+              - not_null
+          - name: timestamp
+            tests:
+              - not_null
+
+models:
+  - name: stg_weather_forecasts
+    description: >
+      Cleaned daily forecast data. Includes V1 temperature columns and
+      V2 evolved columns (precipitation, wind, UV) that appear as NULL
+      until the extraction pipeline switches to schema version 2.
+    columns:
+      - name: city
+        tests:
+          - not_null
+      - name: forecast_date
+        tests:
+          - not_null
+      - name: temperature_max_c
+        tests:
+          - not_null
+      - name: temperature_min_c
+        tests:
+          - not_null
+
+  - name: stg_weather_hourly
+    description: >
+      Cleaned hourly weather data. V1 includes temperature and humidity.
+      V2 adds precipitation, wind speed, and wind direction.
+    columns:
+      - name: city
+        tests:
+          - not_null
+      - name: observation_ts
+        tests:
+          - not_null
+      - name: temperature_c
+        tests:
+          - not_null

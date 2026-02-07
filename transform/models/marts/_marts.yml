@@ -1,0 +1,44 @@
+version: 2
+
+models:
+  - name: fct_weather_summary
+    description: >
+      Final weather fact table joining daily forecasts with hourly aggregations,
+      enriched with location metadata. Tracks schema_version to show which rows
+      were loaded under V1 (temp-only) vs V2 (temp + precip + wind + UV).
+
+      Materialized as incremental (delete+insert on weather_summary_key surrogate key).
+      Supports idempotent backfills via dbt vars:
+        dbt run -s fct_weather_summary --vars '{"start_date": "2026-01-01", "end_date": "2026-01-31"}'
+    columns:
+      - name: weather_summary_key
+        description: >
+          Surrogate key generated from city + forecast_date using
+          dbt_utils.generate_surrogate_key. Used as the unique key for
+          incremental delete+insert strategy.
+        tests:
+          - unique
+          - not_null
+      - name: city
+        description: City name
+        tests:
+          - not_null
+      - name: forecast_date
+        description: Date of the forecast
+        tests:
+          - not_null
+      - name: forecast_temp_max_c
+        description: Forecasted maximum temperature (°C)
+        tests:
+          - not_null
+      - name: schema_version
+        description: >
+          Derived field: 1 if only V1 columns present, 2 if V2 evolved columns
+          (precipitation, wind, UV) have data.
+        tests:
+          - accepted_values:
+              values: [1, 2]
+      - name: temp_max_delta_c
+        description: >
+          Difference between forecasted and observed daily max temperature.
+          Useful for forecast accuracy monitoring.

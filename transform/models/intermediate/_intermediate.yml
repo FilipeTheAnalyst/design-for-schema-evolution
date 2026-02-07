@@ -1,0 +1,21 @@
+version: 2
+
+models:
+  - name: int_weather_daily_agg
+    description: >
+      Daily aggregation of hourly weather observations per city.
+      Bridges hourly raw data and final mart summaries. NULL-safe
+      for V2 evolved columns (precipitation, wind).
+    columns:
+      - name: city
+        tests:
+          - not_null
+      - name: observation_date
+        tests:
+          - not_null
+      - name: observation_count
+        description: Number of hourly observations aggregated
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 48

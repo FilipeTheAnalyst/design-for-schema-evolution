@@ -1,0 +1,21 @@
+version: 2
+
+seeds:
+  - name: location_lookup
+    description: >
+      Reference table of monitored cities with coordinates, timezone, and country code.
+      Used to enrich weather data in the staging layer.
+    columns:
+      - name: city
+        description: City name (primary key)
+        tests:
+          - unique
+          - not_null
+      - name: latitude
+        description: WGS84 latitude
+      - name: longitude
+        description: WGS84 longitude
+      - name: timezone
+        description: IANA timezone identifier
+      - name: country
+        description: ISO 3166-1 alpha-2 country code
