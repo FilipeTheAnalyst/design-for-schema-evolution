@@ -30,7 +30,7 @@ iceberg_tables:
   - name: RAW.WEATHER_FORECASTS_ICEBERG
     columns:
       - name: city
-        data_type: VARCHAR
+        data_type: STRING
       - name: latitude
         data_type: FLOAT
       - name: longitude
@@ -46,9 +46,9 @@ iceberg_tables:
       - name: apparent_temperature_min
         data_type: FLOAT
       - name: sunrise
-        data_type: VARCHAR
+        data_type: STRING
       - name: sunset
-        data_type: VARCHAR
+        data_type: STRING
       - name: ingested_at
         data_type: TIMESTAMP_NTZ
     comment: "Daily weather forecasts - Iceberg table with explicit schema"
@@ -57,7 +57,7 @@ iceberg_tables:
   - name: RAW.WEATHER_HOURLY_ICEBERG
     columns:
       - name: city
-        data_type: VARCHAR
+        data_type: STRING
       - name: latitude
         data_type: FLOAT
       - name: longitude
