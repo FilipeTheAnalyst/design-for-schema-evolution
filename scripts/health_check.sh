@@ -94,7 +94,6 @@ echo "▶ Project Structure"
 DIRS=(
     "extract"
     "transform"
-    "snowflake"
     "docs"
     ".github/workflows"
 )
@@ -118,9 +117,7 @@ FILES=(
     "justfile"
     "Dockerfile"
     "docker-compose.yml"
-    "titan.yml"
     "extract/open_meteo_pipeline.py"
-    "snowflake/manifest.py"
     "transform/dbt_project.yml"
     "transform/profiles.yml"
 )
@@ -149,10 +146,10 @@ if [ -f ".env" ]; then
     
     # Check for required vars
     REQUIRED_VARS=(
-        "SNOWFLAKE_ACCOUNT"
-        "SNOWFLAKE_USER"
-        "SNOWFLAKE_PASSWORD"
-        "SNOWFLAKE_ROLE"
+        "DUCKDB_DATABASE"
+        "AWS_ENDPOINT_URL"
+        "AWS_ACCESS_KEY_ID"
+        "AWS_SECRET_ACCESS_KEY"
     )
     
     for VAR in "${REQUIRED_VARS[@]}"; do
@@ -168,7 +165,7 @@ if [ -f ".env" ]; then
 else
     fail ".env file not found (run: just setup-env)"
     ((FAILED++))
-    info "After creating .env, fill in your Snowflake credentials"
+    info "After creating .env, LocalStack will be auto-configured"
 fi
 
 echo ""
@@ -275,36 +272,12 @@ fi
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Titan Infrastructure as Code
-# ─────────────────────────────────────────────────────────────────────────────
-
-echo "▶ Titan Infrastructure as Code"
-
-if [ -f "snowflake/manifest.py" ]; then
-    pass "Titan manifest exists"
-    ((PASSED++))
-else
-    fail "Missing: snowflake/manifest.py"
-    ((FAILED++))
-fi
-
-if [ -f "titan.yml" ]; then
-    pass "Titan configuration exists"
-    ((PASSED++))
-else
-    fail "Missing: titan.yml"
-    ((FAILED++))
-fi
-
-echo ""
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Just Commands
 # ─────────────────────────────────────────────────────────────────────────────
 
 echo "▶ Just Commands"
 
-REQUIRED_RECIPES=("setup-env" "install-uv" "install" "setup" "build" "extract" "titan-plan" "titan-apply")
+REQUIRED_RECIPES=("setup-env" "install-uv" "install" "setup" "build" "extract" "extract-v2" "dbt-build" "pipeline-v1" "pipeline-v2")
 
 for RECIPE in "${REQUIRED_RECIPES[@]}"; do
     if just --list 2>/dev/null | grep -q "$RECIPE"; then
@@ -340,9 +313,9 @@ if [ "$FAILED" -eq 0 ]; then
     echo -e "${GREEN}✓ All checks passed!${RESET}"
     echo ""
     echo "Next steps:"
-    echo "  1. Update .env with your Snowflake credentials"
-    echo "  2. Run: uv sync"
-    echo "  3. Follow: SETUP_VALIDATION.md"
+    echo "  1. Run: uv sync"
+    echo "  2. Follow: QUICK_START.md"
+    echo "  3. Start: just localstack-up"
     exit 0
 else
     echo -e "${RED}✗ Some checks failed${RESET}"

@@ -1,6 +1,7 @@
 [runtime]
 log_level = "INFO"
 
-[destination.snowflake]
-# These are resolved from environment variables at runtime.
-# See .env.example for the full list.
+[destination.duckdb]
+# DuckDB destination configured via environment variables
+# DUCKDB_DATABASE: path to local database file (e.g., ./data/schema_evolution.duckdb)
+# See .env.example for details.

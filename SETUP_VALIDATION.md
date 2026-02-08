@@ -7,9 +7,9 @@ This document provides a step-by-step validation of the entire project setup. Fo
 Before starting, verify you have the following installed:
 
 ```bash
-# Python 3.10+
-python --version
-# Expected: Python 3.10.x or higher
+# Python 3.10-3.13 (3.14+ has dbt compatibility issues)
+python3 --version
+# Expected: Python 3.10.x, 3.11.x, 3.12.x, or 3.13.x
 
 # uv package manager
 uv --version
@@ -40,62 +40,43 @@ git --version
 ```bash
 just setup-env
 # This creates .env from .env.example (won't overwrite existing)
+
+# Verify the file was created:
+cat .env
 ```
 
 ### 1.2 Verify `.env` with LocalStack defaults
 
 ```bash
 # The .env file comes pre-configured for LocalStack:
-# - DUCKDB_DATABASE: ./data/schema_evolution.duckdb
-# - DUCKDB_SCHEMA: raw
-# - AWS_ENDPOINT_URL: http://localhost:4566 (LocalStack S3)
-# - AWS_ACCESS_KEY_ID: test (dummy credentials)
-# - AWS_SECRET_ACCESS_KEY: test (dummy credentials)
-
-# Check the file:
 cat .env | grep -E "DUCKDB_|AWS_"
-```
 
-### 1.3 Verify environment variables are set
-
-```bash
-# Source the .env file
-export $(cat .env | xargs)
-
-# Verify key vars
-echo "Account: $SNOWFLAKE_ACCOUNT"
-echo "User: $SNOWFLAKE_USER"
-echo "Database: $SNOWFLAKE_DATABASE"
+# Expected output:
+# DUCKDB_DATABASE=./data/schema_evolution.duckdb
+# DUCKDB_SCHEMA=raw
+# AWS_ENDPOINT_URL=http://localhost:4566
+# AWS_ACCESS_KEY_ID=test
+# AWS_SECRET_ACCESS_KEY=test
 ```
 
 ---
 
-## Step 2: Python Environment
+## Step 2: Python & Dependency Installation
 
-### 2.1 Install uv (if needed)
+### 2.1 Install Python packages
 
 ```bash
-command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
+just install
+# This runs: uv sync
+# Installs all dependencies from pyproject.toml
 ```
 
-### 2.2 Sync Python dependencies
+### 2.2 Verify installed packages
 
 ```bash
-# This creates a .venv virtual environment and installs all deps
-uv sync
-
-# Verify Python is available with installed packages
-./.venv/bin/python --version
-./.venv/bin/python -c "import dlt; import dbt; print('✓ Core packages installed')"
-```
-
-### 2.3 Verify key packages
-
-```bash
-# Check individual packages
 uv pip list | grep -E "dlt|dbt|duckdb|boto3|requests|python-dotenv"
 
-# Expected output should include:
+# Expected packages:
 # - dlt
 # - dbt-core
 # - dbt-duckdb
@@ -105,88 +86,7 @@ uv pip list | grep -E "dlt|dbt|duckdb|boto3|requests|python-dotenv"
 # - python-dotenv
 ```
 
----
-
-## Step 3: Snowflake Infrastructure Setup
-
-### 3.1 Verify Snowflake connectivity
-
-```bash
-# Test Snowflake connection
-python -c "
-import os
-import snowflake.connector
-
-os.environ.update({
-    'SNOWFLAKE_ACCOUNT': os.getenv('SNOWFLAKE_ACCOUNT'),
-    'SNOWFLAKE_USER': os.getenv('SNOWFLAKE_USER'),
-    'SNOWFLAKE_PASSWORD': os.getenv('SNOWFLAKE_PASSWORD'),
-    'SNOWFLAKE_ROLE': os.getenv('SNOWFLAKE_ROLE', 'SYSADMIN'),
-})
-
-try:
-    session = snowflake.connector.connect(
-        account=os.getenv('SNOWFLAKE_ACCOUNT'),
-        user=os.getenv('SNOWFLAKE_USER'),
-        password=os.getenv('SNOWFLAKE_PASSWORD'),
-        role=os.getenv('SNOWFLAKE_ROLE'),
-    )
-    print('✓ Snowflake connection successful')
-    session.close()
-except Exception as e:
-    print(f'✗ Connection failed: {e}')
-"
-```
-
-### 3.2 Preview Titan infrastructure changes
-
-```bash
-# See what Titan will create (dry-run)
-just titan-plan
-
-# Expected output:
-# » titan core
-# » Plan: X to add, 0 to change, 0 to destroy.
-# (showing database, schemas, warehouse, tables)
-```
-
-### 3.3 Apply Titan infrastructure
-
-```bash
-# Create the infrastructure in Snowflake
-just titan-apply
-
-# Expected: All resources created successfully
-# - Database: SCHEMA_EVOLUTION_DB
-# - Schemas: RAW, STAGING, INTERMEDIATE, MARTS, SNAPSHOTS
-# - Warehouse: COMPUTE_WH (XSMALL)
-# - Tables: WEATHER_FORECASTS_ICEBERG, WEATHER_HOURLY_ICEBERG
-```
-
-### 3.4 Verify infrastructure in Snowflake
-
-```bash
-# Query to verify resources were created
-snowsql --config /dev/.snowsqlconfig << EOF
-USE ROLE SYSADMIN;
-USE DATABASE SCHEMA_EVOLUTION_DB;
-
--- List schemas
-SHOW SCHEMAS;
-
--- List Iceberg tables in RAW
-SHOW TABLES IN RAW;
-
--- List warehouse
-SHOW WAREHOUSES;
-EOF
-```
-
----
-
-## Step 4: dbt Setup & Validation
-
-### 4.1 Install dbt packages
+### 2.3 Install dbt packages
 
 ```bash
 just dbt-deps
@@ -196,364 +96,275 @@ just dbt-deps
 # - dbt_expectations
 ```
 
-### 4.2 dbt compile (validates SQL without running)
-
-```bash
-cd transform
-./.venv/bin/dbt compile --profiles-dir .
-# Expected: Compile successful, all models parse correctly
-
-# Check compilation output
-ls target/compiled/schema_evolution
-```
-
-### 4.3 dbt documentation
-
-```bash
-cd transform
-./.venv/bin/dbt docs generate --profiles-dir .
-
-# Generates docs in target/
-ls target/index.html
-echo "✓ Documentation generated"
-```
-
 ---
 
-## Step 5: Docker Build & Validation
+## Step 3: Docker & LocalStack Setup
 
-### 5.1 Build Docker image
+### 3.1 Build Docker image
 
 ```bash
-# This creates a multi-stage Docker image with all dependencies
 just build
 
-# Or manually:
-docker build -t schema-evolution:latest .
-
-# Expected: Build completes successfully
-# Multi-stage: base → deps → app
+# Expected output:
+# Successfully built schema-evolution:latest
+# Includes all dependencies: dlt, dbt-duckdb, duckdb, boto3, etc.
 ```
 
-### 5.2 Verify Docker image
+### 3.2 Start LocalStack (S3 emulation)
 
 ```bash
-# Check image was built
-docker image ls | grep schema-evolution
+just localstack-up
 
-# Test image (dry-run)
-docker compose run --rm extract --help
-# Should show help for open_meteo_pipeline
+# Expected output:
+# LocalStack starting... wait ~10s for readiness
+# LocalStack ready at http://localhost:4566 ✓
+```
+
+### 3.3 Verify LocalStack S3 bucket
+
+```bash
+# List S3 buckets via LocalStack
+aws --endpoint-url=http://localhost:4566 s3 ls
+
+# Expected output:
+# 2024-02-08 12:34:56 schema-evolution-iceberg
 ```
 
 ---
 
-## Step 6: Extraction Layer
+## Step 4: dbt Validation
 
-### 6.1 Local extraction (V1 schema)
+### 4.1 dbt compile (validates SQL without running)
 
 ```bash
-# This extracts using V1 schema (temperature + humidity only)
-just extract-local
+cd transform && dbt compile --profiles-dir . --target dev
 
 # Expected output:
-# - Fetches data from Open-Meteo API (5 cities)
-# - Loads into Snowflake RAW schema
-# - Creates tables: weather_forecasts, weather_hourly
-# - Shows load summary
-
-# Verify in Snowflake
-snowsql << EOF
-USE SCHEMA_EVOLUTION_DB.RAW;
-SELECT COUNT(*) FROM WEATHER_FORECASTS;
-SELECT COUNT(*) FROM WEATHER_HOURLY;
-EOF
+# ✓ Compiled successfully
+# (All models compile without errors)
 ```
 
-### 6.2 Docker extraction (V1 schema)
+### 4.2 Create data directory
 
 ```bash
-# Run extraction via Docker
+mkdir -p ./data
+# DuckDB will auto-create the database file here
+```
+
+---
+
+## Step 5: Data Pipeline Validation
+
+### 5.1 Extract V1 schema (original fields)
+
+```bash
 just extract
 
-# Expected: Same as local but containerized
-```
-
-### 6.3 Local extraction (V2 schema - evolved)
-
-```bash
-# This extracts using V2 schema (adds precipitation, wind, UV)
-just extract-local version=2
-
 # Expected output:
-# - Same cities but with additional columns
-# - Snowflake detects new columns and adds them (schema evolution!)
+# Pipeline load complete
+# Loaded tables into DuckDB RAW schema:
+#   - weather_forecasts (100-200 rows)
+#   - weather_hourly (1000-2000 rows)
 
-# Verify new columns in Snowflake
-snowsql << EOF
-USE SCHEMA_EVOLUTION_DB.RAW;
-DESCRIBE TABLE WEATHER_FORECASTS;
-EOF
+# Optionally verify:
+just duckdb
+> SELECT * FROM raw.weather_forecasts LIMIT 5;
+> .quit
 ```
 
----
-
-## Step 7: Transformation Layer (dbt)
-
-### 7.1 Local dbt models (V1 data)
+### 5.2 Run dbt models on V1 data
 
 ```bash
-# Assumes V1 data was extracted
-cd transform
-
-# Rebuild all models from scratch
-./.venv/bin/dbt run --full-refresh --profiles-dir .
-
-# Expected: 
-# - Staging models: stg_weather_forecasts, stg_weather_hourly
-# - Intermediate models: int_weather_daily_agg
-# - Marts: fct_weather_summary
-# All models run successfully
-
-# Check results
-./.venv/bin/dbt test --profiles-dir .
-```
-
-### 7.2 dbt seed data
-
-```bash
-# Load lookup tables (cities, timezones)
-cd transform
-./.venv/bin/dbt seed --profiles-dir .
-
-# Expected: location_lookup loaded into STAGING.LOCATION_LOOKUP
-```
-
-### 7.3 Docker dbt build
-
-```bash
-# Run full dbt build (models + tests) via Docker
 just dbt-build
 
-# Expected: All models + tests pass
+# Expected output:
+# ✓ 8 models selected
+# ✓ Completed successfully
+# (All tests pass)
+```
+
+### 5.3 Extract V2 schema (evolved fields)
+
+```bash
+just extract-v2
+
+# Expected output:
+# Pipeline load complete
+# New columns added to DuckDB:
+#   - precipitation_sum
+#   - wind_speed_10m_max
+#   - uv_index_max
+#   - etc.
+```
+
+### 5.4 Rebuild dbt models on V2 data
+
+```bash
+just dbt-build
+
+# Expected output:
+# ✓ 8 models selected
+# ✓ Completed successfully
+# (All models rebuild, handling evolved schema gracefully)
 ```
 
 ---
 
-## Step 8: Full Pipeline End-to-End
+## Step 6: Full End-to-End Demo
 
-### 8.1 V1 Complete Pipeline
+### 6.1 Run complete V1 → V2 pipeline
 
 ```bash
-# Orchestrates: extract V1 → seed → dbt build
+# Clean and restart
+just db-clean
+
+# Run V1 pipeline
 just pipeline-v1
+# Expected: Extract V1 → Load Seeds → Build Models
 
-# Expected:
-# 1. Extract: weather data with V1 schema
-# 2. Seed: location lookup table
-# 3. dbt: all models + tests pass
-# 4. Output: X rows in fct_weather_summary
-```
-
-### 8.2 V2 Complete Pipeline (Schema Evolution Demo)
-
-```bash
-# Demonstrates schema evolution:
-# extract V2 (new columns) → dbt build (handles evolved schema)
+# Run V2 pipeline (schema evolved)
 just pipeline-v2
-
-# Expected:
-# 1. Extract: same data but with precipitation_sum, wind_speed, uv_index
-# 2. dbt: handles new columns gracefully (safe_cast macro)
-# 3. Result: fct_weather_summary now has schema_version=2 for new rows
-
-# Verify evolution happened
-snowsql << EOF
-USE SCHEMA_EVOLUTION_DB.MARTS;
-SELECT schema_version, COUNT(*) FROM fct_weather_summary GROUP BY schema_version;
--- Should show V1 and V2 data in same table
-EOF
+# Expected: Extract V2 → Rebuild Models
+# Evolved columns now have data instead of NULL
 ```
 
-### 8.3 Full Demo (V1 then V2)
+### 6.2 Inspect final results
 
 ```bash
-# Runs complete story: V1 baseline → V2 evolution
-just demo
+just duckdb
 
-# This orchestrates:
-# 1. pipeline-v1 (baseline)
-# 2. pipeline-v2 (evolution)
-# Story complete!
-```
+# Verify V1 data exists:
+> SELECT COUNT(*) FROM raw.weather_forecasts;
 
----
+# Verify V2 evolved columns exist:
+> SELECT precipitation_sum, wind_speed_10m_max, uv_index_max FROM raw.weather_forecasts LIMIT 1;
 
-## Step 9: Verify Data Quality
+# Verify marts table:
+> SELECT * FROM marts.fct_weather_summary LIMIT 5;
 
-### 9.1 Check for silent NULLs
+# Check schema versions:
+> SELECT DISTINCT schema_version FROM marts.fct_weather_summary;
 
-```bash
-# Run the NULL drift detection test
-cd transform
-./.venv/bin/dbt test -s assert_no_null_temperatures --profiles-dir .
-
-# Expected: ✓ Test passes (no unexpected NULLs in temp fields)
-```
-
-### 9.2 Schema version tracking
-
-```sql
--- Query to see evolution in action
-SELECT 
-    schema_version,
-    COUNT(*) as row_count,
-    MIN(forecast_date) as first_date,
-    MAX(forecast_date) as last_date
-FROM SCHEMA_EVOLUTION_DB.MARTS.fct_weather_summary
-GROUP BY schema_version
-ORDER BY schema_version;
-
--- Expected:
--- schema_version | row_count | first_date | last_date
--- 1              | X         | 2026-02-07 | 2026-02-16
--- 2              | Y         | 2026-02-07 | 2026-02-16
-```
-
-### 9.3 Backfill incremental model
-
-```bash
-# Test the incremental backfill pattern
-cd transform
-./.venv/bin/dbt run -s fct_weather_summary \
-  --vars '{"start_date": "2026-02-07", "end_date": "2026-02-10"}' \
-  --profiles-dir .
-
-# Expected: Backfill completes, V1 rows now have V2 data via delete+insert
-```
-
----
-
-## Step 10: CI/CD Validation
-
-### 10.1 Lint Python code
-
-```bash
-just lint
-
-# Expected:
-# - No ruff errors
-# - extract/ code meets standards
-```
-
-### 10.2 dbt compile (CI mode)
-
-```bash
-cd transform
-DBT_PROFILES_DIR=./transform \
-  ./.venv/bin/dbt compile --profiles-dir . --target ci
-
-# Expected: Compilation succeeds for CI target
-```
-
-### 10.3 Docker build (CI check)
-
-```bash
-# Same as Step 5 but validates Docker can build in CI
-docker build -t schema-evolution:ci .
+> .quit
 ```
 
 ---
 
 ## Troubleshooting
 
-### Issue: `uv sync` fails with module not found
+### `python3 --version` shows Python 3.14+
 
-**Solution:** 
+**Problem:** dbt has compatibility issues with Python 3.14.
+
+**Solution:** Use Python 3.13 or earlier:
 ```bash
-# Ensure you have Python 3.10+ installed
-python --version
-
-# If using wrong Python, specify it:
-uv sync --python 3.11
+pyenv install 3.13.5
+pyenv local 3.13.5
+uv sync
 ```
 
-### Issue: Snowflake connection fails
+### Docker build fails
+
+**Problem:** Docker daemon not running or resource constraints.
 
 **Solution:**
 ```bash
-# Verify credentials are correct
-cat .env | grep SNOWFLAKE_
+# Start Docker
+open -a Docker  # macOS
 
-# Test connection manually
-snowsql
-# In snowsql prompt: SELECT CURRENT_ACCOUNT();
+# Wait 30s, then retry
+just build
 ```
 
-### Issue: dbt compile fails
+### LocalStack port 4566 already in use
+
+**Problem:** Another process or stale container is using the port.
 
 **Solution:**
 ```bash
-cd transform
+# Stop all LocalStack containers
+docker ps | grep localstack | awk '{print $1}' | xargs docker stop
 
-# Reinstall dbt packages
-./.venv/bin/dbt deps --profiles-dir . --clean
-
-# Recompile
-./.venv/bin/dbt compile --profiles-dir .
+# Clean and retry
+just localstack-down
+just localstack-up
 ```
 
-### Issue: Docker build fails with "permission denied"
+### `dbt compile` fails with "Could not find profile"
+
+**Problem:** dbt profile not found in transform/ directory.
 
 **Solution:**
 ```bash
-# Ensure Docker daemon is running
-docker ps
+# Verify profile exists
+ls -la transform/profiles.yml
 
-# Rebuild without cache
-docker build --no-cache -t schema-evolution:latest .
+# Verify environment variables
+echo $DBT_PROFILES_DIR
+
+# Try explicit target:
+cd transform && dbt compile --profiles-dir . --target dev
 ```
 
-### Issue: Titan plan shows errors
+### DuckDB file locked or corrupted
+
+**Problem:** Previous process held lock or incomplete transaction.
 
 **Solution:**
 ```bash
-# Verify titan config
-cat titan.yml
+# Clean database
+just db-clean
 
-# Check manifest syntax
-./.venv/bin/python -c "from snowflake.manifest import bp; print('✓ Manifest valid')"
+# Verify it was deleted
+ls -la data/
+
+# Restart pipeline
+just pipeline-v1
+```
+
+### Extract command fails with "destination not configured"
+
+**Problem:** dlt doesn't recognize DuckDB configuration.
+
+**Solution:**
+```bash
+# Verify .env has DuckDB vars:
+cat .env | grep DUCKDB_
+
+# Try with Docker:
+just extract
+
+# Or locally (check PYTHONPATH):
+cd extract && python -m extract.open_meteo_pipeline --help
 ```
 
 ---
 
-## Success Criteria
+## Checklist: Setup Complete
 
-✅ All of the following should complete without errors:
+- [ ] Python 3.10-3.13 installed
+- [ ] uv installed and `uv --version` works
+- [ ] Docker & Docker Compose running
+- [ ] .env file created with LocalStack defaults
+- [ ] `just install` completed successfully
+- [ ] `just dbt-deps` completed successfully
+- [ ] Docker image built (`just build`)
+- [ ] LocalStack started (`just localstack-up`)
+- [ ] V1 extraction successful (`just extract`)
+- [ ] dbt models built (`just dbt-build`)
+- [ ] V2 extraction successful (`just extract-v2`)
+- [ ] V2 models rebuilt successfully
+- [ ] Query results show evolved columns with data
+- [ ] All tests passing
 
-1. `just setup-env` → .env created
-2. `uv sync` → Virtual environment set up
-3. `just titan-plan` → Infrastructure changes displayed
-4. `just titan-apply` → Snowflake resources created
-5. `just dbt-deps` → dbt packages installed
-6. `just extract-local` → V1 data extracted and loaded
-7. `just extract-local version=2` → V2 data with evolved schema
-8. `just dbt-build-local` → All models and tests pass
-9. `just pipeline-v1` → Full V1 pipeline succeeds
-10. `just pipeline-v2` → Full V2 pipeline demonstrates evolution
-11. `just demo` → Complete story (V1→V2) runs end-to-end
-
-If all 11 steps pass, **the project is working correctly!** 🎉
+**If all checked:** Your setup is complete! 🎉
 
 ---
 
 ## Next Steps
 
-Once validation is complete:
-
-1. **Phase 1**: Iceberg Time Travel exploration
-2. **Phase 2**: Multi-format comparison (Delta, Hudi)
-3. **Phase 3**: Advanced evolution scenarios
-4. **Phase 4**: Evolution analytics & monitoring
-
-See the [enhancement recommendations](docs/README.md) for details.
+- Run the full demo: `just demo`
+- Generate dbt docs: `just dbt-docs`
+- Explore the data locally: `just duckdb`
+- Review the transformations: `cd transform && dbt docs generate`
+- Read the schema evolution guide: [docs/04_designing_for_evolution.md](docs/04_designing_for_evolution.md)

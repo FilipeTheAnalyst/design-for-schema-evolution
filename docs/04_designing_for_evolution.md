@@ -12,27 +12,30 @@ Apache Iceberg brings **explicit, versioned schemas** to analytics storage:
 4. **Type promotions** — `int → long`, `float → double` are safe
 5. **Blocked breaking changes** — Dropping columns or incompatible type changes are prevented
 
-### Snowflake-managed Iceberg tables
+### DuckDB-managed Iceberg tables
 
 ```sql
-CREATE ICEBERG TABLE weather_forecasts_iceberg (
-    city                     STRING,
-    latitude                 FLOAT,
-    longitude                FLOAT,
+CREATE ICEBERG TABLE weather_forecasts (
+    city                     VARCHAR,
+    latitude                 DOUBLE,
+    longitude                DOUBLE,
     forecast_date            DATE,
-    temperature_2m_max       FLOAT,
-    temperature_2m_min       FLOAT
+    temperature_2m_max       DOUBLE,
+    temperature_2m_min       DOUBLE
 )
-    CATALOG = 'SNOWFLAKE'
-    EXTERNAL_VOLUME = 'my_iceberg_external_volume'
-    BASE_LOCATION = 'weather_forecasts/';
+USING ICEBERG;
 ```
 
 ### Schema evolution in action
 
-When V2 fields arrive:
+When V2 fields arrive, dlt automatically adds them:
 
 ```sql
+-- dlt detects new columns and adds them
+ALTER TABLE weather_forecasts ADD COLUMN precipitation_sum DOUBLE;
+ALTER TABLE weather_forecasts ADD COLUMN wind_speed_10m_max DOUBLE;
+ALTER TABLE weather_forecasts ADD COLUMN uv_index_max DOUBLE;
+```
 -- Metadata-only operation — no data rewrite
 ALTER ICEBERG TABLE weather_forecasts_iceberg ADD COLUMN precipitation_sum FLOAT;
 ALTER ICEBERG TABLE weather_forecasts_iceberg ADD COLUMN wind_speed_10m_max FLOAT;
@@ -55,100 +58,66 @@ Existing rows get `NULL` for the new columns. New rows include the data. The sch
 dlt handles schema evolution natively:
 - Detects new columns in API responses
 - Adds them to the destination schema automatically
-- Works with Snowflake's Iceberg table support
+- Works with DuckDB's Iceberg table support
 
-## Infrastructure as Code with Titan
+## Schema Management with DuckDB
 
-Manually running SQL scripts to create tables is error-prone. This project uses **Titan**, a Python-based Infrastructure as Code tool for Snowflake, to define and manage all resources declaratively.
+In this project, schemas are managed through:
+1. **dlt**: Automatically detects and adds new columns from the API
+2. **Iceberg**: Enforces explicit, versioned schemas at the storage layer
+3. **dbt**: Handles missing columns gracefully with the `safe_cast` macro
 
-### Why Titan?
+### Schema evolution workflow
 
-| Aspect | Manual SQL | Titan (IaC) |
-|--------|-----------|-----------|
-| Version control | Changes are ad-hoc | All changes tracked in git |
-| Reproducibility | Manual + error-prone | Deterministic from code |
-| Rollback | Manual ALTER/DROP | git revert + `titan apply` |
-| Documentation | Separate README notes | Inline code + docstrings |
-| Drift detection | None | `titan plan` shows differences |
-| Schema evolution | Manual ALTER TABLE | Programmatic in manifest |
+The beauty of this approach is that **schema changes flow automatically**:
 
-### Titan manifest
-
-All Snowflake resources are defined in [snowflake/manifest.py](../snowflake/manifest.py):
-
-```python
-from titan import resources as res
-
-database = res.Database(
-    name="SCHEMA_EVOLUTION_DB",
-    comment="Design for Schema Evolution demo project",
-)
-
-weather_forecasts_iceberg = res.IcebergTable(
-    name="WEATHER_FORECASTS_ICEBERG",
-    schema=raw_schema,
-    columns=[
-        res.Column(name="city", data_type="STRING"),
-        res.Column(name="latitude", data_type="FLOAT"),
-        res.Column(name="forecast_date", data_type="DATE"),
-        # ... more columns
-    ],
-    catalog="SNOWFLAKE",
-)
-```
-
-### Applying infrastructure
+1. V1 extraction loads initial columns (temperature, humidity)
+2. V2 extraction adds new columns (precipitation, wind, UV)
+3. dlt automatically detects and adds columns to DuckDB
+4. Iceberg validates the schema compatibility
+5. dbt models adapt using `safe_cast` for optional columns
 
 ```bash
-# See what will change (dry-run)
-just titan-plan
+# Extract V1 (initial schema)
+just extract
+# → Tables created with V1 columns
 
-# Apply the changes to Snowflake
-just titan-apply
+# Extract V2 (evolved schema)
+just extract-v2
+# → dlt detects new columns and adds them
 
-# Inspect a specific resource
-just titan-describe SCHEMA_EVOLUTION_DB
+# Rebuild dbt models
+just dbt-build
+# → Models handle both V1 and V2 data gracefully
 ```
 
-### Schema evolution with Titan
+### Safe column casting in dbt
 
-After V2 data is available, evolve the Iceberg tables by adding columns to the manifest:
+The `safe_cast` macro handles missing columns:
 
-```python
-weather_forecasts_iceberg = res.IcebergTable(
-    # ... existing columns ...
-    columns=[
-        # ... V1 columns ...
-        res.Column(name="precipitation_sum", data_type="FLOAT"),
-        res.Column(name="wind_speed_10m_max", data_type="FLOAT"),
-        res.Column(name="uv_index_max", data_type="FLOAT"),
-    ],
-)
+```sql
+{{ dbt_utils.safe_cast("precipitation_sum", api.type_float(), "0.0") }}
 ```
 
-Then:
-
-```bash
-just titan-plan    # Review the ADD COLUMN operations
-just titan-apply   # Apply to Snowflake
-```
-
-Titan handles the safe Iceberg evolution—no manual ALTER TABLE needed.
+This means:
+- If `precipitation_sum` exists in V2 data → use its value
+- If column is missing in V1 data → use default (0.0)
+- Queries never fail due to missing columns
 
 ## What to look at
 
-- [snowflake/manifest.py](../snowflake/manifest.py) — Titan Infrastructure as Code for all Snowflake objects
-- [extract/sources/open_meteo.py](../extract/sources/open_meteo.py) — V1 → V2 schema version switching
+- [extract/open_meteo_pipeline.py](../extract/open_meteo_pipeline.py) — V1 → V2 schema version switching
+- [transform/macros/safe_cast.sql](../transform/macros/safe_cast.sql) — Defensive column casting
 
 ## Backfilling after schema evolution
 
-When Iceberg (or Snowflake) schema evolution adds new columns, historical rows will contain
+When Iceberg schema evolution adds new columns, historical rows will contain
 `NULL` for those columns. The `fct_weather_summary` mart uses an incremental `delete+insert`
 strategy with idempotent backfill support to fix this.
 
 ### Step-by-step backfill workflow
 
-1. **Detect the evolution** — dlt or Iceberg detects new V2 columns (precipitation, wind, UV).
+1. **Detect the evolution** — dlt detects new V2 columns (precipitation, wind, UV) and adds them to Iceberg.
 
 2. **Re-extract historical data** with the V2 schema:
    ```bash

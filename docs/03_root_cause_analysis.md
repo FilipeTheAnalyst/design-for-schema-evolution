@@ -14,13 +14,13 @@ The root cause of silent schema failures is **implicit schemas**.
 | Column renames | Silent (old column returns NULL) | Blocked or migration required |
 | Type changes | Silent coercion or NULL | Validation error |
 
-### The Snowflake VARIANT pattern
+### Implicit schemas in unstructured formats
 
-Loading JSON into `VARIANT` is convenient:
+Loading semi-structured data (like JSON) without a schema is convenient:
 
 ```sql
-CREATE TABLE raw_weather (raw VARIANT, loaded_at TIMESTAMP);
-COPY INTO raw_weather FROM @my_stage;
+CREATE TABLE raw_weather (raw VARIANT OR json_col JSON);
+INSERT INTO raw_weather VALUES (parse_json('{"temp": 20.5, ...}'));
 ```
 
 But every downstream query becomes an implicit schema:
@@ -46,5 +46,5 @@ This is exactly what Apache Iceberg provides.
 
 ## What to look at
 
-- [snowflake/manifest.py](../snowflake/manifest.py) — Titan Infrastructure as Code definitions
-- [extract/sources/open_meteo.py](../extract/sources/open_meteo.py) — V1 vs V2 param lists
+- [extract/open_meteo_pipeline.py](../extract/open_meteo_pipeline.py) — V1 vs V2 param lists
+- [docs/04_designing_for_evolution.md](04_designing_for_evolution.md) — Iceberg schema versioning in practice

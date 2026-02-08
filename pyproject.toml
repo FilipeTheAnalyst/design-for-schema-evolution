@@ -1,7 +1,7 @@
 [project]
 name = "design-for-schema-evolution"
 version = "0.1.0"
-description = "Hands-on project demonstrating schema evolution in analytics pipelines using dlt, Snowflake Iceberg tables, and dbt."
+description = "Hands-on project demonstrating schema evolution in analytics pipelines using dlt, DuckDB with Iceberg, and dbt."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
 license = {text = "MIT"}

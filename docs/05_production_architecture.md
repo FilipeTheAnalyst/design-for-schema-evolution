@@ -11,18 +11,18 @@
                           ▼
 ┌────────────────────────────────────────────────────────────────┐
 │                     dlt (dlthub)                               │
-│          Extract + Load → Snowflake                            │
+│        Extract + Load → DuckDB + LocalStack S3                 │
 │     • Schema inference & evolution                             │
 │     • V1 → V2 column additions tracked                         │
 └─────────────────────────┬──────────────────────────────────────┘
                           │
                           ▼
 ┌────────────────────────────────────────────────────────────────┐
-│         Snowflake + Apache Iceberg (via Titan IaC)             │
-│     • RAW schema: dlt-managed tables                           │
+│      DuckDB + Apache Iceberg (via LocalStack S3)               │
+│     • Local file-based OLAP database                           │
 │     • Iceberg tables: explicit, versioned schemas              │
-│     • STAGING / INTERMEDIATE / MARTS schemas                    │
-│     • Infrastructure defined in Git (snowflake/manifest.py)    │
+│     • RAW / STAGING / INTERMEDIATE / MARTS schemas             │
+│     • Reproducible local environment (Docker)                  │
 └─────────────────────────┬──────────────────────────────────────┘
                           │
                           ▼
@@ -40,30 +40,35 @@
 
 | Layer | Tool | Responsibility |
 |-------|------|----------------|
-| **Extract** | dlt | API → Snowflake, schema inference, column evolution |
-| **Infrastructure** | Titan | Version-controlled database, schemas, warehouse, table definitions |
-| **Store** | Snowflake + Iceberg | Explicit schemas, versioned metadata, safe evolution |
+| **Extract** | dlt | API → DuckDB, schema inference, column evolution |
+| **Storage** | DuckDB | Local OLAP database with Iceberg support |
+| **S3 Emulation** | LocalStack | Iceberg table backend, S3-compatible API |
 | **Transform** | dbt | Cleaning, aggregation, testing, documentation |
-| **Orchestrate** | Docker + just + GitHub Actions | Reproducibility, CI/CD, scheduling |
+| **Orchestrate** | Docker + just + GitHub Actions | Reproducibility, CI/CD, integration |
 
-## Infrastructure as Code with Titan
+## Running in Docker with Compose
 
-In production, Snowflake objects are managed via Titan, not manual SQL:
+
+## Development environment with Docker Compose
+
+In development, all infrastructure (DuckDB + LocalStack) is managed via Docker Compose:
 
 ```bash
-# Code review process:
-git diff                       # See proposed infrastructure changes
-just titan-plan               # Preview what will change in Snowflake
-# → Review in PR, approve
-just titan-apply              # Apply to Snowflake
-git commit snowflake/manifest.py versions.md
+# Start LocalStack + services
+just localstack-up
+
+# Verify S3 bucket exists
+aws --endpoint-url=http://localhost:4566 s3 ls
+
+# Stop everything
+just localstack-down
 ```
 
 This ensures:
-- **Auditability**: Every change is traced in git
-- **Rollback**: `git revert + just titan-apply` reverts infrastructure changes
-- **Team consistency**: Different engineers' state converges
-- **Schema evolution**: Programmatic column additions without manual ALTER TABLE
+- **Reproducibility**: Every developer has identical environment
+- **No external dependencies**: Works offline or in CI/CD
+- **Iceberg table backend**: S3-compatible storage for table versioning
+- **Schema evolution**: dlt automatically detects and adds new columns
 
 ## Key design decisions
 
@@ -77,7 +82,7 @@ This ensures:
 ```
 API schema change
     │
-    ├─ dlt detects new columns → adds to Snowflake ✓
+    ├─ dlt detects new columns → adds to DuckDB ✓
     │
     ├─ Iceberg validates schema compatibility ✓
     │
@@ -90,7 +95,7 @@ No single layer solves everything. The architecture works because **each layer h
 
 ## Incremental backfill after schema evolution
 
-In production, schema evolution creates a gap: new columns exist in the schema but historical
+In development and production, schema evolution creates a gap: new columns exist in the schema but historical
 rows have `NULL` values. The `fct_weather_summary` mart handles this with an idempotent
 backfill pattern.
 
@@ -105,9 +110,9 @@ backfill pattern.
 
 ```bash
 # Backfill a specific date range (idempotent — safe to re-run)
-dbt run -s fct_weather_summary \
+cd transform && dbt run -s fct_weather_summary \
   --vars '{"start_date": "2026-01-01", "end_date": "2026-01-31"}' \
-  --profiles-dir .
+  --profiles-dir . --target dev
 
 # Backfill via Docker
 docker compose run --rm dbt-run \
@@ -115,7 +120,7 @@ docker compose run --rm dbt-run \
   --vars '{"start_date": "2026-01-01", "end_date": "2026-01-31"}'
 
 # Full refresh (drops table and rebuilds from scratch)
-dbt run -s fct_weather_summary --full-refresh --profiles-dir .
+cd transform && dbt run -s fct_weather_summary --full-refresh --profiles-dir . --target dev
 ```
 
 ### How it works
@@ -139,8 +144,8 @@ dbt run -s fct_weather_summary \
 
 ## What to look at
 
-- [snowflake/manifest.py](../snowflake/manifest.py) — Titan Infrastructure as Code for all Snowflake objects
-- [titan.yml](../titan.yml) — Titan configuration and connection settings
-- [justfile](../justfile) — `just titan-plan` and `just titan-apply` recipes
-- [docker-compose.yml](../docker-compose.yml) — containerized pipeline services
-- [.github/workflows/](../.github/workflows/) — CI/CD automation
+- [docker-compose.yml](../docker-compose.yml) — LocalStack + DuckDB services
+- [scripts/init-localstack.sh](../scripts/init-localstack.sh) — S3 bucket initialization
+- [justfile](../justfile) — `just localstack-up/down` recipes
+- [.github/workflows/](../.github/workflows/) — CI/CD automation with Docker Compose
+
