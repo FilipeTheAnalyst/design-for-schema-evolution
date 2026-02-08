@@ -12,12 +12,8 @@ role: ${SNOWFLAKE_ROLE}
 warehouse: COMPUTE_WH
 database: SCHEMA_EVOLUTION_DB
 
-# Manifest location
-defaults:
-  manifest: snowflake/manifest.py
+# Path to the Python manifest file containing Blueprint resources
+manifest: iac/manifest.py
 
-# Enable for additional logging
-# debug: true
-
-# Dry-run mode (plan without applying)
-# plan_only: true
+# Enable for additional logging  
+# verbose: true

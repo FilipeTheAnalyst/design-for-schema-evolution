@@ -40,15 +40,18 @@ setup: setup-env install-uv install dbt-deps
 
 # Plan Snowflake infrastructure changes (dry-run)
 titan-plan:
-    titan plan
+    @set -a && [ -f .env ] && . .env || true && set +a
+    ./.venv/bin/titan plan --config titan_cli_config.yml
 
 # Apply Snowflake infrastructure changes
 titan-apply:
-    titan apply
+    @set -a && [ -f .env ] && . .env || true && set +a
+    ./.venv/bin/titan apply --config titan_cli_config.yml
 
 # Show Snowflake resource details
 titan-describe resource="SCHEMA_EVOLUTION_DB":
-    titan describe {{resource}}
+    @set -a && [ -f .env ] && . .env || true && set +a
+    ./.venv/bin/titan describe --config titan_cli_config.yml {{resource}}
 
 # ─── Docker ─────────────────────────────────────────────────────────────────
 

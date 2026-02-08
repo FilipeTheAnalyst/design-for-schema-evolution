@@ -1,0 +1,54 @@
+database: SCHEMA_EVOLUTION_DB
+# Titan CLI config (YAML) - generated from iac/manifest.py
+# This file contains resource definitions only. Supply Snowflake credentials via
+# environment variables (SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PASSWORD,
+# SNOWFLAKE_ROLE) so the Titan CLI can authenticate.
+
+# Resource definitions
+databases:
+  - name: SCHEMA_EVOLUTION_DB
+    comment: "Schema evolution demo database"
+    schemas:
+      - name: RAW
+      - name: STAGING
+      - name: INTERMEDIATE
+      - name: MARTS
+      - name: SNAPSHOTS
+
+# Tables managed by Titan via SQL (Titan will parse SQL strings into table resources)
+tables:
+  - |
+    CREATE ICEBERG TABLE IF NOT EXISTS SCHEMA_EVOLUTION_DB.RAW.WEATHER_FORECASTS_ICEBERG (
+      city VARCHAR,
+      latitude FLOAT,
+      longitude FLOAT,
+      forecast_date DATE,
+      temperature_2m_max FLOAT,
+      temperature_2m_min FLOAT,
+      apparent_temperature_max FLOAT,
+      apparent_temperature_min FLOAT,
+      sunrise VARCHAR,
+      sunset VARCHAR,
+      ingested_at TIMESTAMP_NTZ
+    ) CLUSTER BY (city, forecast_date) COMMENT='Daily weather forecasts - Iceberg table with explicit schema';
+
+  - |
+    CREATE ICEBERG TABLE IF NOT EXISTS SCHEMA_EVOLUTION_DB.RAW.WEATHER_HOURLY_ICEBERG (
+      city VARCHAR,
+      latitude FLOAT,
+      longitude FLOAT,
+      timestamp TIMESTAMP_NTZ,
+      temperature_2m FLOAT,
+      relative_humidity_2m FLOAT,
+      apparent_temperature FLOAT,
+      ingested_at TIMESTAMP_NTZ
+    ) CLUSTER BY (city, timestamp) COMMENT='Hourly weather observations - Iceberg table with explicit schema';
+
+# warehouses: (optional) configure compute here if you want Titan to manage it
+#  - name: COMPUTE_WH
+#    warehouse_size: XSMALL
+#    auto_suspend: 60
+#    auto_resume: true
+#    comment: "Default compute for schema evolution project"
+
+# Optional: vars or additional config can be added here
