@@ -102,9 +102,13 @@ dbt-docs:
 pipeline-v1: extract dbt-seed dbt-build
     @echo "V1 pipeline complete ✓"
 
-# Run full pipeline: extract V2 → seed → dbt build
-pipeline-v2: extract-v2 dbt-seed dbt-build
-    @echo "V2 pipeline complete ✓"
+# Run full pipeline: extract V2 → dbt build (demonstrates schema evolution)
+pipeline-v2: extract-v2 dbt-build
+    @echo "V2 pipeline complete ✓ — schema evolution applied"
+
+# Run full demo: V1 → V2 (shows schema evolution end-to-end)
+demo: pipeline-v1 pipeline-v2
+    @echo "Full demo complete ✓ — V1 and V2 data loaded"
 
 # ─── Development Helpers ───────────────────────────────────────────────────
 
@@ -118,16 +122,8 @@ db-info:
 
 # Run linting
 lint:
-    ruff check extract/
+    ruff check extract/ --fix
     ruff format --check extract/
-
-# Run full pipeline: extract V2 → dbt build (demonstrates schema evolution)
-pipeline-v2: extract-v2 dbt-build
-    @echo "V2 pipeline complete ✓ — schema evolution applied"
-
-# Run full demo: V1 → V2 (shows schema evolution end-to-end)
-demo: pipeline-v1 pipeline-v2
-    @echo "Full demo complete ✓ — V1 and V2 data loaded"
 
 # ─── Local dbt commands (no Docker) ────────────────────────────────────────
 
@@ -144,10 +140,6 @@ dbt-build-local:
     cd transform && dbt build --profiles-dir .
 
 # ─── Quality & Linting ─────────────────────────────────────────────────────
-
-# Lint Python code
-lint:
-    ruff check extract/ --fix
 
 # Format Python code
 fmt:

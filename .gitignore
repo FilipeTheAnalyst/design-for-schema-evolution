@@ -19,6 +19,8 @@ env/
 transform/target/
 transform/dbt_packages/
 transform/logs/
+transform/.user.yml
+transform/package-lock.yml
 
 # dlt
 extract/.dlt/pipelines/
