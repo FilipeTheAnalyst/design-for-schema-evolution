@@ -1,4 +1,3 @@
-database: SCHEMA_EVOLUTION_DB
 # Titan CLI config (YAML) - generated from iac/manifest.py
 # This file contains resource definitions only. Supply Snowflake credentials via
 # environment variables (SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PASSWORD,
@@ -7,48 +6,81 @@ database: SCHEMA_EVOLUTION_DB
 # Resource definitions
 databases:
   - name: SCHEMA_EVOLUTION_DB
+    owner: SYSADMIN
     comment: "Schema evolution demo database"
     schemas:
       - name: RAW
+        owner: SYSADMIN
+        comment: "Raw landing schema"
       - name: STAGING
+        owner: SYSADMIN
+        comment: "Staging schema for transformations"
       - name: INTERMEDIATE
+        owner: SYSADMIN
+        comment: "Intermediate schema for enrichments"
       - name: MARTS
+        owner: SYSADMIN
+        comment: "Analytics marts"
       - name: SNAPSHOTS
+        owner: SYSADMIN
+        comment: "Snapshot storage"
 
 # Tables managed by Titan via SQL (Titan will parse SQL strings into table resources)
-tables:
-  - |
-    CREATE ICEBERG TABLE IF NOT EXISTS SCHEMA_EVOLUTION_DB.RAW.WEATHER_FORECASTS_ICEBERG (
-      city VARCHAR,
-      latitude FLOAT,
-      longitude FLOAT,
-      forecast_date DATE,
-      temperature_2m_max FLOAT,
-      temperature_2m_min FLOAT,
-      apparent_temperature_max FLOAT,
-      apparent_temperature_min FLOAT,
-      sunrise VARCHAR,
-      sunset VARCHAR,
-      ingested_at TIMESTAMP_NTZ
-    ) CLUSTER BY (city, forecast_date) COMMENT='Daily weather forecasts - Iceberg table with explicit schema';
+iceberg_tables:
+  - name: RAW.WEATHER_FORECASTS_ICEBERG
+    columns:
+      - name: city
+        data_type: VARCHAR
+      - name: latitude
+        data_type: FLOAT
+      - name: longitude
+        data_type: FLOAT
+      - name: forecast_date
+        data_type: DATE
+      - name: temperature_2m_max
+        data_type: FLOAT
+      - name: temperature_2m_min
+        data_type: FLOAT
+      - name: apparent_temperature_max
+        data_type: FLOAT
+      - name: apparent_temperature_min
+        data_type: FLOAT
+      - name: sunrise
+        data_type: VARCHAR
+      - name: sunset
+        data_type: VARCHAR
+      - name: ingested_at
+        data_type: TIMESTAMP_NTZ
+    comment: "Daily weather forecasts - Iceberg table with explicit schema"
+    owner: SYSADMIN
 
-  - |
-    CREATE ICEBERG TABLE IF NOT EXISTS SCHEMA_EVOLUTION_DB.RAW.WEATHER_HOURLY_ICEBERG (
-      city VARCHAR,
-      latitude FLOAT,
-      longitude FLOAT,
-      timestamp TIMESTAMP_NTZ,
-      temperature_2m FLOAT,
-      relative_humidity_2m FLOAT,
-      apparent_temperature FLOAT,
-      ingested_at TIMESTAMP_NTZ
-    ) CLUSTER BY (city, timestamp) COMMENT='Hourly weather observations - Iceberg table with explicit schema';
+  - name: RAW.WEATHER_HOURLY_ICEBERG
+    columns:
+      - name: city
+        data_type: VARCHAR
+      - name: latitude
+        data_type: FLOAT
+      - name: longitude
+        data_type: FLOAT
+      - name: timestamp
+        data_type: TIMESTAMP_NTZ
+      - name: temperature_2m
+        data_type: FLOAT
+      - name: relative_humidity_2m
+        data_type: FLOAT
+      - name: apparent_temperature
+        data_type: FLOAT
+      - name: ingested_at
+        data_type: TIMESTAMP_NTZ
+    comment: "Hourly weather observations - Iceberg table with explicit schema"
+    owner: SYSADMIN
 
 # warehouses: (optional) configure compute here if you want Titan to manage it
-#  - name: COMPUTE_WH
-#    warehouse_size: XSMALL
-#    auto_suspend: 60
-#    auto_resume: true
-#    comment: "Default compute for schema evolution project"
+warehouses:
+  - name: COMPUTE_WH
+    warehouse_size: XSMALL
+    auto_suspend: 60
+    auto_resume: true
+    comment: "Default compute for schema evolution project"
 
 # Optional: vars or additional config can be added here
