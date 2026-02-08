@@ -1,17 +1,16 @@
 """
-Snowflake Infrastructure as Code using Titan
+Archived: Legacy Infrastructure as Code (Titan Blueprint)
 
-This manifest defines all Snowflake resources for the schema evolution project:
+This file is kept for reference only. The current project uses Docker Compose + LocalStack
+for all infrastructure management.
+
+Original manifest defined Snowflake resources:
   • Database: SCHEMA_EVOLUTION_DB
   • Schemas: RAW, STAGING, INTERMEDIATE, MARTS, SNAPSHOTS
   • Warehouse: COMPUTE_WH
   • Iceberg tables: weather_forecasts_iceberg, weather_hourly_iceberg
 
-Run with:
-    just titan-plan               # Show planned changes without applying
-    just titan-apply              # Apply changes to Snowflake
-
-Docs: https://titan.readthedocs.io/
+See README.md for current setup instructions.
 """
 
 import os

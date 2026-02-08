@@ -23,6 +23,12 @@ transform/logs/
 # dlt
 extract/.dlt/pipelines/
 extract/.dlt/secrets.toml
+dlt_pipelines/
+
+# DuckDB
+data/
+*.duckdb
+*.duckdb.wal
 
 # IDE
 .vscode/

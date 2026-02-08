@@ -1,14 +1,33 @@
 # =============================================================================
-# Docker Compose — Design for Schema Evolution
+# Docker Compose — Design for Schema Evolution with DuckDB + LocalStack
 # =============================================================================
 # Usage:
-#   docker compose run extract         # Run dlt extraction (V1)
-#   docker compose run extract-v2      # Run dlt extraction (V2 - evolved schema)
-#   docker compose run dbt-run         # Run dbt models
-#   docker compose run dbt-test        # Run dbt tests
+#   docker compose up -d                # Start LocalStack + create S3 bucket
+#   docker compose run extract          # Run dlt extraction (V1) → DuckDB
+#   docker compose run extract-v2       # Run dlt extraction (V2 - evolved schema)
+#   docker compose run dbt-run          # Run dbt models
+#   docker compose run dbt-test         # Run dbt tests
 # =============================================================================
 
+version: '3.8'
+
 services:
+  # ─── LocalStack: AWS S3 emulation (for Iceberg tables) ──────────────────
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"  # LocalStack gateway
+    environment:
+      - SERVICES=s3
+      - DEBUG=1
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    volumes:
+      - ./scripts/init-localstack.sh:/docker-entrypoint-initaws.d/init-s3.sh
+    networks:
+      - local-dev
+
   # ─── Base service (shared config) ─────────────────────────────────────────
   pipeline:
     build:
@@ -18,17 +37,23 @@ services:
       - .env
     environment:
       - DBT_PROFILES_DIR=/app/transform
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./extract:/app/extract
       - ./transform:/app/transform
+      - ./data:/app/data
+    depends_on:
+      - localstack
+    networks:
+      - local-dev
 
-  # ─── Extraction: dlt → Snowflake (V1 schema) ─────────────────────────────
+  # ─── Extraction: dlt → DuckDB (V1 schema) ────────────────────────────────
   extract:
     extends:
       service: pipeline
     command: python -m extract.open_meteo_pipeline --schema-version 1
 
-  # ─── Extraction: dlt → Snowflake (V2 evolved schema) ─────────────────────
+  # ─── Extraction: dlt → DuckDB (V2 evolved schema) ─────────────────────────
   extract-v2:
     extends:
       service: pipeline
@@ -39,28 +64,28 @@ services:
     extends:
       service: pipeline
     working_dir: /app/transform
-    command: dbt run --profiles-dir .
+    command: dbt run --profiles-dir . --target dev
 
   # ─── Transformation: dbt test ─────────────────────────────────────────────
   dbt-test:
     extends:
       service: pipeline
     working_dir: /app/transform
-    command: dbt test --profiles-dir .
+    command: dbt test --profiles-dir . --target dev
 
   # ─── Transformation: dbt build (run + test) ──────────────────────────────
   dbt-build:
     extends:
       service: pipeline
     working_dir: /app/transform
-    command: dbt build --profiles-dir .
+    command: dbt build --profiles-dir . --target dev
 
   # ─── Seeds ────────────────────────────────────────────────────────────────
   dbt-seed:
     extends:
       service: pipeline
     working_dir: /app/transform
-    command: dbt seed --profiles-dir .
+    command: dbt seed --profiles-dir . --target dev
 
   # ─── Generate docs ───────────────────────────────────────────────────────
   dbt-docs:
@@ -70,3 +95,7 @@ services:
     command: dbt docs generate --profiles-dir .
     ports:
       - "8080:8080"
+
+networks:
+  local-dev:
+    driver: bridge

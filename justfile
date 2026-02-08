@@ -1,5 +1,5 @@
 # =============================================================================
-# justfile — Design for Schema Evolution
+# justfile — Design for Schema Evolution (DuckDB + LocalStack)
 # =============================================================================
 # Install just: https://github.com/casey/just#installation
 #   brew install just        (macOS)
@@ -17,7 +17,7 @@ default:
 # Copy .env.example to .env (won't overwrite existing)
 setup-env:
     @[ -f .env ] && echo ".env already exists — skipping" || cp .env.example .env
-    @echo "Edit .env with your Snowflake credentials"
+    @echo "Edit .env if needed (defaults are already set for LocalStack)"
 
 # Install uv (if not already installed)
 install-uv:
@@ -36,22 +36,23 @@ dbt-deps:
 setup: setup-env install-uv install dbt-deps
     @echo "Setup complete ✓"
 
-# ─── Snowflake Infrastructure (Titan) ───────────────────────────────────────
+# ─── LocalStack & DuckDB ─────────────────────────────────────────────────────
 
-# Plan Snowflake infrastructure changes (dry-run)
-titan-plan:
-    @set -a && [ -f .env ] && . .env || true && set +a
-    ./.venv/bin/titan plan --config titan_cli_config.yml
+# Start LocalStack (S3 emulation)
+localstack-up:
+    docker compose up -d localstack
+    @echo "LocalStack starting... wait ~10s for readiness"
+    @sleep 10
+    @echo "LocalStack ready at http://localhost:4566 ✓"
 
-# Apply Snowflake infrastructure changes
-titan-apply:
-    @set -a && [ -f .env ] && . .env || true && set +a
-    ./.venv/bin/titan apply --config titan_cli_config.yml
+# Stop LocalStack
+localstack-down:
+    docker compose down localstack
 
-# Show Snowflake resource details
-titan-describe resource="SCHEMA_EVOLUTION_DB":
-    @set -a && [ -f .env ] && . .env || true && set +a
-    ./.venv/bin/titan describe --config titan_cli_config.yml {{resource}}
+# Clean DuckDB database and data
+db-clean:
+    rm -rf ./data/schema_evolution.duckdb ./dlt_pipelines
+    @echo "Database cleaned ✓"
 
 # ─── Docker ─────────────────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ titan-describe resource="SCHEMA_EVOLUTION_DB":
 build:
     docker compose build
 
-# ─── Extraction (dlt) ──────────────────────────────────────────────────────
+# ─── Extraction (dlt → DuckDB) ─────────────────────────────────────────────
 
 # Run extraction with V1 schema (original fields)
 extract:
@@ -100,6 +101,25 @@ dbt-docs:
 # Run full pipeline: extract V1 → seed → dbt build
 pipeline-v1: extract dbt-seed dbt-build
     @echo "V1 pipeline complete ✓"
+
+# Run full pipeline: extract V2 → seed → dbt build
+pipeline-v2: extract-v2 dbt-seed dbt-build
+    @echo "V2 pipeline complete ✓"
+
+# ─── Development Helpers ───────────────────────────────────────────────────
+
+# Open interactive DuckDB CLI
+duckdb:
+    duckdb ./data/schema_evolution.duckdb
+
+# Show DuckDB stats
+db-info:
+    @duckdb ./data/schema_evolution.duckdb ".tables"
+
+# Run linting
+lint:
+    ruff check extract/
+    ruff format --check extract/
 
 # Run full pipeline: extract V2 → dbt build (demonstrates schema evolution)
 pipeline-v2: extract-v2 dbt-build

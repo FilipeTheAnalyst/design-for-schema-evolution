@@ -2,7 +2,7 @@
 # CI Pipeline — Lint, Test, and Validate
 # =============================================================================
 # Triggers on pull requests and pushes to develop/main.
-# Validates Python code quality and dbt compilation.
+# Validates Python code quality and dbt compilation against DuckDB.
 # =============================================================================
 
 name: CI
@@ -43,17 +43,13 @@ jobs:
 
   # ─── dbt Compile (validates SQL without running) ──────────────────────────
   dbt-compile:
-    name: dbt Compile
+    name: dbt Compile (DuckDB)
     runs-on: ubuntu-latest
     needs: lint
     env:
-      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
-      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
       DBT_PROFILES_DIR: ./transform
+      DUCKDB_DATABASE: ./data/schema_evolution.duckdb
+      DUCKDB_SCHEMA: ci
 
     steps:
       - uses: actions/checkout@v4
@@ -67,7 +63,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dbt
-        run: uv pip install --system dbt-core dbt-snowflake
+        run: uv pip install --system dbt-core dbt-duckdb
 
       - name: Install dbt packages
         working-directory: transform
@@ -75,7 +71,7 @@ jobs:
 
       - name: dbt compile
         working-directory: transform
-        run: dbt compile --profiles-dir .
+        run: dbt compile --profiles-dir . --target ci
 
   # ─── Docker Build ─────────────────────────────────────────────────────────
   docker:
@@ -88,23 +84,3 @@ jobs:
       - name: Build Docker image
         run: docker build -t schema-evolution:ci .
 
-  # ─── Titan Plan (Infrastructure as Code validation) ────────────────────────
-  titan-plan:
-    name: Titan Plan
-    runs-on: ubuntu-latest
-    needs: lint
-    env:
-      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
-      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Titan Plan (dry-run)
-        uses: Titan-Systems/titan-core-action@main
-        with:
-          run-mode: 'plan'
-          resource-path: './snowflake'
-          dry-run: 'true'

@@ -42,18 +42,18 @@ just setup-env
 # This creates .env from .env.example (won't overwrite existing)
 ```
 
-### 1.2 Edit `.env` with Snowflake credentials
+### 1.2 Verify `.env` with LocalStack defaults
 
 ```bash
-# Open .env and fill in:
-# - SNOWFLAKE_ACCOUNT: Your account identifier (e.g., abc12345.us-east-1)
-# - SNOWFLAKE_USER: Your Snowflake username
-# - SNOWFLAKE_PASSWORD: Your Snowflake password
-# - SNOWFLAKE_ROLE: User role (default: SYSADMIN)
-# - SNOWFLAKE_WAREHOUSE: Warehouse name (default: COMPUTE_WH)
+# The .env file comes pre-configured for LocalStack:
+# - DUCKDB_DATABASE: ./data/schema_evolution.duckdb
+# - DUCKDB_SCHEMA: raw
+# - AWS_ENDPOINT_URL: http://localhost:4566 (LocalStack S3)
+# - AWS_ACCESS_KEY_ID: test (dummy credentials)
+# - AWS_SECRET_ACCESS_KEY: test (dummy credentials)
 
 # Check the file:
-cat .env | grep -E "SNOWFLAKE_"
+cat .env | grep -E "DUCKDB_|AWS_"
 ```
 
 ### 1.3 Verify environment variables are set
@@ -93,13 +93,14 @@ uv sync
 
 ```bash
 # Check individual packages
-uv pip list | grep -E "dlt|dbt|titan|requests|python-dotenv"
+uv pip list | grep -E "dlt|dbt|duckdb|boto3|requests|python-dotenv"
 
 # Expected output should include:
-# - dlt (and snowflake extra)
+# - dlt
 # - dbt-core
-# - dbt-snowflake
-# - titan-core 0.11.1
+# - dbt-duckdb
+# - duckdb
+# - boto3
 # - requests
 # - python-dotenv
 ```

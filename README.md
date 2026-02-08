@@ -15,14 +15,24 @@ Open-Meteo API (JSON)
    dlt (dlthub)          ← Extract & Load
         │
         ▼
-Snowflake + Iceberg       ← Storage with explicit schemas
+   DuckDB (local)        ← Storage with explicit schemas
         │
         ▼
-    dbt Core              ← Transform, test & document
+  LocalStack S3          ← Iceberg table storage (optional)
+        │
+        ▼
+    dbt Core             ← Transform, test & document
         │
         ▼
 Docker + just + GH Actions ← Reproducibility & CI/CD
 ```
+
+**Key advantages:**
+- ✅ Zero external dependencies (no Snowflake account needed)
+- ✅ Fast local development (in-process DuckDB)
+- ✅ Full schema evolution testing with Iceberg
+- ✅ LocalStack S3 for realistic S3-backed Iceberg tables
+- ✅ Reproducible CI/CD with Docker Compose
 
 ## The story
 
@@ -40,48 +50,54 @@ Docker + just + GH Actions ← Reproducibility & CI/CD
 
 - Python 3.10+
 - [uv](https://docs.astral.sh/uv/) package manager (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- Docker & Docker Compose
+- Docker & Docker Compose (for containerized runs)
 - [just](https://github.com/casey/just#installation) command runner (`brew install just`)
-- A Snowflake account ([free trial](https://signup.snowflake.com/))
+- DuckDB will be installed automatically via `uv sync`
+
+**✅ No Snowflake account, no paid services — everything is local!**
 
 ### ⚡ Start Here
-
-**First time?** Use the [QUICK_START.md](QUICK_START.md) checklist (5 minutes) to verify prerequisites.
-
-Then follow the step-by-step [SETUP_VALIDATION.md](SETUP_VALIDATION.md) guide for full setup.
-
-### Setup
 
 ```bash
 # 1. Clone the repo
 git clone https://github.com/FilipeTheAnalyst/design-for-schema-evolution.git
 cd design-for-schema-evolution
 
-# 2. Copy env template and add your Snowflake credentials
+# 2. Copy env template (defaults are set for LocalStack)
 just setup-env
-# → Edit .env with your Snowflake account details
 
-# 3. Set up Snowflake objects with Titan (Infrastructure as Code)
-just install                           # Install Titan via uv
-just titan-plan                        # See planned changes
-just titan-apply                       # Apply infrastructure
+# 3. Full setup: install deps, dbt packages
+just install && just dbt-deps
 
-# 4. Build the Docker image
+# 4. Build Docker image
 just build
 
-# 5. Run the full V1 pipeline
+# 5. Start LocalStack (S3 emulation)
+just localstack-up
+
+# 6. Run the full V1 pipeline
 just pipeline-v1
 
-# 6. Run V2 to see schema evolution in action
+# 7. Run V2 to see schema evolution in action
 just pipeline-v2
 ```
 
-### Run without Docker
+### Run without Docker (local dev)
 
 ```bash
-just setup          # Install uv + deps locally
-just extract-local  # Run dlt extraction
-just dbt-build-local # Run dbt models + tests
+just setup                # Install uv + deps locally
+just extract-local        # Run dlt extraction → DuckDB
+cd transform && dbt build --profiles-dir . --target dev  # Run dbt models + tests
+```
+
+### Access your data
+
+```bash
+# Open interactive DuckDB CLI
+just duckdb
+
+# Show tables/schemas in DuckDB
+just db-info
 ```
 
 ---
@@ -108,61 +124,50 @@ To ensure the entire project works end-to-end, follow the **[SETUP_VALIDATION.md
 
 **Check this** to understand the current state of the project before running setup.
 
-## Snowflake free trial setup
-
-1. Go to [signup.snowflake.com](https://signup.snowflake.com/)
-2. Choose **Enterprise** edition (30-day free trial, no credit card)
-3. Select a cloud provider and region
-4. After account creation, note your **account identifier** (e.g. `abc12345.us-east-1`)
-5. Add credentials to your `.env` file (copy from `.env.example`)
-6. Run Titan to create database, schemas, and Iceberg tables:
-   ```bash
-   just titan-apply
-   ```
-
-Titan uses Infrastructure as Code (defined in [snowflake/manifest.py](snowflake/manifest.py)) to safely manage your Snowflake resources. See [Titan docs](https://titan.readthedocs.io/) for more.
-
 ---
 
 ## Project structure
 
 ```
-├── snowflake/                          # Titan Infrastructure as Code
-│   ├── manifest.py                     #   Database, schemas, warehouse, Iceberg tables
-│   └── __init__.py
-│
 ├── extract/                            # dlt extraction layer
 │   ├── sources/
 │   │   └── open_meteo.py               #   dlt source: V1 & V2 weather resources
-│   └── open_meteo_pipeline.py          #   Pipeline: Open-Meteo → Snowflake
+│   └── open_meteo_pipeline.py          #   Pipeline: Open-Meteo → DuckDB
 │
-├── transform/                          # dbt project
+├── transform/                          # dbt project (DuckDB adapter)
 │   ├── models/
 │   │   ├── staging/            #   stg_weather_forecasts, stg_weather_hourly
 │   │   ├── intermediate/       #   int_weather_daily_agg
-│   │   └── marts/              #   fct_weather_summary
+│   │   └── marts/              #   fct_weather_summary (incremental, Iceberg-ready)
 │   ├── macros/                 #   safe_cast, generate_schema_name
 │   ├── seeds/                  #   location_lookup.csv
 │   ├── tests/                  #   NULL-drift & schema evolution assertions
-│   └── snapshots/              #   weather_forecast_snapshot
+│   ├── snapshots/              #   weather_forecast_snapshot
+│   └── profiles.yml            #   DuckDB adapter config
 │
-├── docs/                       # 5-part walkthrough
+├── docs/                       # 5-part walkthrough on schema evolution
 │   ├── 01_silent_schema_failures.md
 │   ├── 02_symptom_level_mitigations.md
 │   ├── 03_root_cause_analysis.md
 │   ├── 04_designing_for_evolution.md
 │   └── 05_production_architecture.md
 │
-├── .github/workflows/          # CI/CD
-│   ├── ci.yml                  #   Lint, dbt compile, Docker build
-│   └── deploy.yml              #   Scheduled extraction + transformation
+├── scripts/
+│   └── init-localstack.sh      # LocalStack S3 bucket initialization
 │
+├── data/                       # Local DuckDB database (git-ignored)
+│   └── schema_evolution.duckdb
+│
+├── .github/workflows/          # CI/CD
+│   ├── ci.yml                  #   Lint, dbt compile (DuckDB), Docker build
+│   └── deploy.yml              #   Extraction + transformation (Docker Compose)
+│
+├── dlt_pipelines/              # dlt pipeline state (git-ignored)
 ├── Dockerfile                  # Containerized pipeline
-├── docker-compose.yml          # Service definitions
-├── titan.yml                   # Titan configuration
+├── docker-compose.yml          # LocalStack + DuckDB services
 ├── justfile                    # Command shortcuts
-├── pyproject.toml              # Python project config
-└── .env.example                # Environment variable template
+├── pyproject.toml              # Python project config (dlt, dbt-duckdb, duckdb, boto3)
+└── .env.example                # Environment variable template (LocalStack defaults)
 ```
 
 ---
@@ -171,18 +176,21 @@ Titan uses Infrastructure as Code (defined in [snowflake/manifest.py](snowflake/
 
 | Command | Description |
 |---------|-------------|
-| `just setup` | Full local setup (env + uv + deps + Titan + dbt packages) |
-| `just titan-plan` | Preview Snowflake infrastructure changes |
-| `just titan-apply` | Create/update Snowflake resources (database, schemas, warehouse, Iceberg tables) |
+| `just setup` | Full local setup (env + uv + deps + dbt packages) |
+| `just localstack-up` | Start LocalStack S3 emulation |
+| `just localstack-down` | Stop LocalStack |
 | `just build` | Build Docker image |
-| `just extract` | Run dlt extraction V1 (Docker) |
+| `just extract` | Run dlt extraction V1 → DuckDB (Docker) |
 | `just extract-v2` | Run dlt extraction V2 — evolved schema (Docker) |
+| `just extract-local` | Run extraction without Docker |
+| `just dbt-run` | Run dbt models (Docker) |
 | `just dbt-build` | Run dbt models + tests (Docker) |
 | `just pipeline-v1` | Full V1 pipeline: extract → seed → build |
 | `just pipeline-v2` | Full V2 pipeline: extract evolved → build |
-| `just demo` | Run V1 then V2 end-to-end |
+| `just duckdb` | Open interactive DuckDB CLI |
+| `just db-clean` | Delete local DuckDB database |
+| `just db-info` | Show DuckDB tables & schemas |
 | `just lint` | Lint Python code with ruff |
-| `just clean` | Remove build artifacts |
 
 Run `just` with no arguments to see all available commands.
 
@@ -192,9 +200,9 @@ Run `just` with no arguments to see all available commands.
 
 ### What happens
 
-1. **V1 runs**: dlt loads temperature data into Snowflake. dbt builds models. Evolved columns (`precipitation_sum_mm`, `wind_speed_max_kmh`, `uv_index_max`) are `NULL`.
+1. **V1 runs**: dlt loads temperature data into DuckDB. dbt builds models. Evolved columns (`precipitation_sum_mm`, `wind_speed_max_kmh`, `uv_index_max`) are `NULL`.
 
-2. **V2 runs**: dlt detects new columns in the API response and adds them to Snowflake automatically. dbt rebuilds — evolved columns now have data.
+2. **V2 runs**: dlt detects new columns in the API response and adds them to DuckDB. dbt rebuilds — evolved columns now have data.
 
 3. The `fct_weather_summary` mart includes a `schema_version` column so analysts can see which data generation they're working with.
 
@@ -225,9 +233,11 @@ Run `just` with no arguments to see all available commands.
 | Layer | Tool | Purpose |
 |-------|------|---------|
 | **API** | [Open-Meteo](https://open-meteo.com/) | Free weather forecast data (no auth) |
-| **Extract & Load** | [dlt (dlthub)](https://dlthub.com/) | Schema-aware ingestion into Snowflake |
-| **Infrastructure** | [Titan](https://github.com/Titan-Systems/titan) | Infrastructure as Code for Snowflake |
-| **Storage** | [Snowflake](https://www.snowflake.com/) + [Apache Iceberg](https://iceberg.apache.org/) | Warehouse with versioned, explicit schemas |
+| **Extract & Load** | [dlt (dlthub)](https://dlthub.com/) | Schema-aware ingestion into DuckDB |
+| **Storage** | [DuckDB](https://duckdb.org/) | Local OLAP database (no server, no setup) |
+| **S3 Storage** | [LocalStack](https://localstack.cloud/) | AWS S3 emulation (for Iceberg tables) |
+| **S3 Access** | [boto3](https://boto3.amazonaws.com/) | AWS SDK (works with LocalStack) |
+| **DuckDB Adapter** | [dbt-duckdb](https://github.com/dbt-labs/dbt-duckdb) | dbt adapter for DuckDB |
 | **Transform** | [dbt Core](https://www.getdbt.com/) | SQL models, tests, snapshots, docs |
 | **Package manager** | [uv](https://docs.astral.sh/uv/) | Fast Python package installer & resolver |
 | **Containerization** | [Docker](https://www.docker.com/) | Reproducible environment |
@@ -241,24 +251,24 @@ Run `just` with no arguments to see all available commands.
 ### CI (`.github/workflows/ci.yml`)
 - Triggers on push/PR to `develop` and `main`
 - Lints Python with ruff
-- Compiles dbt models (validates SQL)
+- Compiles dbt models against DuckDB (validates SQL)
 - Builds Docker image
 
 ### Deploy (`.github/workflows/deploy.yml`)
 - Triggered manually or on a daily schedule
-- Runs dlt extraction → dbt seed → dbt build
+- Runs dlt extraction → dbt seed → dbt build (using Docker Compose + LocalStack)
 - Supports V1 or V2 schema selection via workflow dispatch
+- All tools run locally in containers — no external services needed
 
-**Required secrets:**
-`SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD`, `SNOWFLAKE_ROLE`, `SNOWFLAKE_WAREHOUSE`, `SNOWFLAKE_DATABASE`
+**No secrets required** — everything runs in-process on GitHub Actions runners!
 
 ---
 
 ## Who this is for
 
-- Analytics engineers working with semi-structured data
-- Data engineers operating Snowflake in production
-- Teams dealing with recurring schema-related incidents
+- Analytics engineers learning about schema evolution
+- Data engineers designing resilient pipelines
+- Teams building local-first, reproducible data stacks
 - Anyone tired of "green pipelines, wrong data"
 
 ---

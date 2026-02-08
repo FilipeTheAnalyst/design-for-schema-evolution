@@ -17,9 +17,9 @@ WORKDIR /app
 # Ensure the venv uv creates is on PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
-# System dependencies + uv
+# System dependencies + uv + aws-cli
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git curl && \
+    apt-get install -y --no-install-recommends git curl awscli && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
